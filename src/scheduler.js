@@ -9,11 +9,17 @@ const { recordTip } = require('./deduplication');
 const { getWinningTopic, recordPoll } = require('./pollManager');
 
 const TIMEZONE = process.env.TIMEZONE || 'Asia/Jerusalem';
-const CRON_EXPRESSION = '0 9 * * *'; // 09:00 AM Israel time
+const CRON_EXPRESSION = '0 8 * * *'; // 08:00 AM Israel time — random delay added inside
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function sendDailyTip() {
+  // Random delay between 0–120 minutes → sends between 08:00 and 10:00
+  const delayMinutes = Math.floor(Math.random() * 121);
+  const delayMs = delayMinutes * 60 * 1000;
+  logger.info(`עיכוב אקראי לפני שליחה: ${delayMinutes} דקות`);
+  await sleep(delayMs);
+
   const now = new Date();
   const dateStr = format(now, 'dd/MM/yyyy HH:mm', { timeZone: TIMEZONE });
   logger.info(`=== הרצת בוט יומי | ${dateStr} ===`);
