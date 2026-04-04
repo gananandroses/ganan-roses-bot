@@ -1,0 +1,7 @@
+.env
+ecosystem.config.js
+node_modules/
+logs/
+data/
+*.log
+.DS_Store
