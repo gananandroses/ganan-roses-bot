@@ -47,9 +47,7 @@ const GROWING_CONDITIONS = [
   'גינה אנכית / קירות ירוקים',
 ];
 function getDayCondition() {
-  const start = new Date(new Date().getFullYear(), 0, 0);
-  const dayOfYear = Math.floor((new Date() - start) / 86400000);
-  return GROWING_CONDITIONS[dayOfYear % GROWING_CONDITIONS.length];
+  return GROWING_CONDITIONS[randomInt(0, GROWING_CONDITIONS.length - 1)];
 }
 
 // ── Domain map ────────────────────────────────────────────────────────────────
