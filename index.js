@@ -4,7 +4,7 @@ const { startScheduler } = require('./src/scheduler');
 
 // Validate required env vars on startup
 const REQUIRED_VARS = [
-  'ANTHROPIC_API_KEY',
+  'GEMINI_API_KEY',
   'GREEN_API_INSTANCE_ID',
   'GREEN_API_TOKEN',
   'TARGET_GROUP_CHAT_ID',
