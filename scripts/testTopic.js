@@ -15,6 +15,8 @@ if (!process.env.GEMINI_API_KEY) {
 const { generateTipAndPoll } = require('../src/tipGenerator');
 const { sendImageByBuffer, sendMessageWithRetry, sendNativePoll } = require('../src/whatsapp');
 const { generateGardenImage } = require('../src/imageGenerator');
+const { generateCharacterImage } = require('../src/characterGenerator');
+const { mergeImages } = require('../src/imageMerger');
 const { recordPoll } = require('../src/pollManager');
 const { recordTip } = require('../src/deduplication');
 const logger = require('../src/logger');
@@ -29,9 +31,18 @@ const chatId = process.env.TARGET_GROUP_CHAT_ID;
   const { tipText, pollOptions, imagePrompt, imageNegativePrompt } =
     await generateTipAndPoll(TOPIC);
 
-  const imageData = await generateGardenImage({ imagePrompt, imageNegativePrompt });
+  const apiKey = process.env.GEMINI_API_KEY;
+  const [imageData, characterData] = await Promise.all([
+    generateGardenImage({ imagePrompt, imageNegativePrompt }),
+    generateCharacterImage(tipText, apiKey),
+  ]);
+
   if (imageData) {
-    await sendImageByBuffer(chatId, imageData.buffer, imageData.mimeType);
+    let finalBuffer = imageData.buffer;
+    if (characterData) {
+      finalBuffer = await mergeImages(imageData.buffer, characterData.buffer);
+    }
+    await sendImageByBuffer(chatId, finalBuffer, 'image/jpeg');
     await new Promise(r => setTimeout(r, 1500));
   }
 
