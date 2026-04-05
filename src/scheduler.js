@@ -5,8 +5,6 @@ const logger = require('./logger');
 const { generateTipAndPoll } = require('./tipGenerator');
 const { sendMessageWithRetry, sendErrorAlert, sendNativePoll, sendImageByBuffer } = require('./whatsapp');
 const { generateGardenImage } = require('./imageGenerator');
-const { generateCharacterImage } = require('./characterGenerator');
-const { mergeImages } = require('./imageMerger');
 const { recordTip } = require('./deduplication');
 const { getWinningTopic, recordPoll } = require('./pollManager');
 
@@ -56,19 +54,10 @@ async function sendDailyTip() {
     return;
   }
 
-  // ── STEP 3: Generate garden image + character image → merge ─────────────────
-  const apiKey = process.env.GEMINI_API_KEY;
-  const [imageData, characterData] = await Promise.all([
-    generateGardenImage({ imagePrompt, imageNegativePrompt }),
-    generateCharacterImage(tipText, apiKey),
-  ]);
-
+  // ── STEP 3: Generate image with character embedded ───────────────────────────
+  const imageData = await generateGardenImage({ imagePrompt, imageNegativePrompt, tipText });
   if (imageData) {
-    let finalBuffer = imageData.buffer;
-    if (characterData) {
-      finalBuffer = await mergeImages(imageData.buffer, characterData.buffer);
-    }
-    await sendImageByBuffer(chatId, finalBuffer, 'image/jpeg');
+    await sendImageByBuffer(chatId, imageData.buffer, imageData.mimeType);
     await sleep(1500);
   } else {
     logger.warn('תמונה לא נוצרה — ממשיך בלי תמונה');
