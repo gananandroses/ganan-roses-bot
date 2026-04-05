@@ -1,17 +1,18 @@
+const fs = require('fs');
+const path = require('path');
 const logger = require('./logger');
 
-// Character description — always the same person, rendered in 3D inside the scene
-const CHARACTER_DESC = `In the scene, include a photorealistic 3D rendered male character who is the gardener: muscular build, Middle Eastern appearance, short dark hair, trimmed beard, full tattoo sleeve on his left arm, wearing blue denim overalls with one strap, red undershirt, brown wide-brim hat, green gardening gloves. He should feel like a real person physically present inside the scene — not a logo, not a cartoon, not a sticker. He is interacting naturally with the garden environment shown in the scene (touching the plant, inspecting the soil, holding a tool, reacting to what he sees). His facial expression and body language match the mood of the scene. Mediterranean skin tone, confident posture.`;
+const LOGO_PATH = path.join(__dirname, '..', 'assets', 'logo.jpeg');
 
 function getMoodContext(tipText) {
-  if (!tipText) return '';
+  if (!tipText) return 'calm and focused, working in the garden';
   const t = tipText;
-  if (t.includes('זהירות') || t.includes('אל ת') || t.includes('מסוכן')) return 'He looks alarmed, pointing at the problem with a serious face.';
-  if (t.includes('?') && (t.includes('מישהו') || t.includes('שמתם לב'))) return 'He is crouching down, closely examining the plant with a curious investigative expression.';
-  if (t.includes('בעיה') || t.includes('נזק') || t.includes('מצהיב') || t.includes('מת')) return 'He looks concerned, frowning at what he sees, shaking his head slightly.';
-  if (t.includes('מדהים') || t.includes('מושלם') || t.includes('עבד')) return 'He is smiling proudly, giving a thumbs up.';
-  if (t.includes('!')) return 'He is confidently explaining something, pointing with one finger raised.';
-  return 'He is calmly working in the garden, focused on the task.';
+  if (t.includes('זהירות') || t.includes('אל ת') || t.includes('מסוכן')) return 'alarmed, pointing at the problem with a serious face and raised eyebrow';
+  if (t.includes('?') && (t.includes('מישהו') || t.includes('שמתם לב'))) return 'crouching curiously, examining closely with squinted eyes and hand on chin';
+  if (t.includes('בעיה') || t.includes('נזק') || t.includes('מצהיב') || t.includes('מת')) return 'concerned and worried, frowning and shaking head slightly';
+  if (t.includes('מדהים') || t.includes('מושלם') || t.includes('עבד')) return 'smiling proudly, giving a big thumbs up';
+  if (t.includes('!')) return 'confidently explaining, pointing upward with one finger';
+  return 'calm and engaged, naturally interacting with the garden';
 }
 
 async function generateGardenImage({ imagePrompt, imageNegativePrompt, tipText }) {
@@ -26,12 +27,25 @@ async function generateGardenImage({ imagePrompt, imageNegativePrompt, tipText }
     return null;
   }
 
-  const moodContext = getMoodContext(tipText || '');
-  const fullPrompt = `${imagePrompt}. ${CHARACTER_DESC} ${moodContext}${imageNegativePrompt ? ` Do NOT include: ${imageNegativePrompt}, cartoon, logo, sticker, flat illustration` : ' Do NOT include: cartoon, logo, sticker, flat illustration'}`;
+  const mood = getMoodContext(tipText || '');
 
-  logger.info(`מייצר תמונה עם דמות | פרומפט: ${imagePrompt.slice(0, 80)}...`);
+  // Build request parts — include logo as reference image if available
+  const textPrompt = `The first image is a reference character design (a cartoon gardener mascot called "Ganan & Roses").
+Take THAT EXACT character from the reference image — same face, same overalls, same hat, same tattoo sleeve, same roses — and render him as a living 3D animated character (Pixar/Disney style, not photorealistic human).
+Place him naturally inside this garden scene: ${imagePrompt}
+His mood/expression: ${mood}.
+He should feel alive and part of the scene, interacting with it.
+Keep his iconic design 100% faithful to the reference — do not change his face, outfit, or style.
+No text, no watermarks.${imageNegativePrompt ? ` Avoid: ${imageNegativePrompt}.` : ''}`;
 
-  logger.info(`מייצר תמונה | פרומפט: ${imagePrompt.slice(0, 100)}...`);
+  const parts = [];
+
+  if (fs.existsSync(LOGO_PATH)) {
+    const logoBase64 = fs.readFileSync(LOGO_PATH).toString('base64');
+    parts.push({ inlineData: { mimeType: 'image/jpeg', data: logoBase64 } });
+    logger.info('לוגו נטען כ-reference');
+  }
+  parts.push({ text: textPrompt });
 
   try {
     const response = await fetch(
@@ -40,8 +54,8 @@ async function generateGardenImage({ imagePrompt, imageNegativePrompt, tipText }
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: fullPrompt }] }],
-          generationConfig: { responseModalities: ['IMAGE'] },
+          contents: [{ parts }],
+          generationConfig: { responseModalities: ['IMAGE', 'TEXT'] },
         }),
       }
     );
@@ -52,8 +66,8 @@ async function generateGardenImage({ imagePrompt, imageNegativePrompt, tipText }
       throw new Error(`${data.error.code}: ${data.error.message}`);
     }
 
-    const parts = data.candidates?.[0]?.content?.parts || [];
-    const imagePart = parts.find((p) => p.inlineData);
+    const responseParts = data.candidates?.[0]?.content?.parts || [];
+    const imagePart = responseParts.find((p) => p.inlineData);
 
     if (!imagePart) {
       throw new Error('לא התקבלה תמונה מ-Gemini');
