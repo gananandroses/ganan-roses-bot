@@ -1,27 +1,5 @@
 const logger = require('./logger');
-
-// Detect mood from tip text
-function detectMood(tipText) {
-  if (!tipText) return 'explaining';
-  const t = tipText;
-  if (t.includes('זהירות') || t.includes('אל תעשו') || t.includes('מסוכן')) return 'warning';
-  if (t.includes('מדהים') || t.includes('מושלם') || t.includes('מעולה')) return 'excited';
-  if (t.includes('?') && (t.includes('מישהו') || t.includes('שמתם לב'))) return 'investigating';
-  if (t.includes('בשוק') || t.includes('מופתע') || t.includes('לא ידעתם')) return 'shocked';
-  if (t.includes('בעיה') || t.includes('נזק') || t.includes('מצהיב') || t.includes('מת')) return 'worried';
-  if (t.includes('!')) return 'proud';
-  return 'explaining';
-}
-
-const MOOD_EXPRESSIONS = {
-  warning:      'raising one finger in a firm warning, serious face, raised eyebrow',
-  excited:      'big enthusiastic grin, bright eyes, energetic thumbs up',
-  investigating:'leaning forward curiously, squinting eyes, hand on chin thinking',
-  shocked:      'mouth wide open, eyes huge, hands raised in disbelief',
-  worried:      'furrowed brow, concerned frown, hand on forehead',
-  proud:        'arms crossed confidently, slight smirk, chest out',
-  explaining:   'one finger raised making a point, confident smile, teaching pose',
-};
+const { mergeWithLogo } = require('./imageMerger');
 
 async function generateGardenImage({ imagePrompt, imageNegativePrompt, tipText }) {
   if (!imagePrompt) {
@@ -35,14 +13,11 @@ async function generateGardenImage({ imagePrompt, imageNegativePrompt, tipText }
     return null;
   }
 
-  // Build character overlay description
-  const mood = detectMood(tipText || '');
-  const expression = MOOD_EXPRESSIONS[mood] || MOOD_EXPRESSIONS.explaining;
-  const characterDesc = `In the bottom-right corner of the image, add a cartoon illustration inset of a muscular male gardener brand mascot: blue denim overalls, red undershirt, brown cowboy hat, tattoo sleeve on left arm, holding a small watering can, surrounded by red roses, comic book illustration style, ${expression}. The mascot inset should be clearly visible but not cover the main scene. Style: brand mascot cartoon overlaid on the photorealistic garden scene.`;
+  const fullPrompt = imageNegativePrompt
+    ? `${imagePrompt}. Do NOT include: ${imageNegativePrompt}`
+    : imagePrompt;
 
-  // Gemini doesn't support a separate negative_prompt field — weave it into the prompt
-  const fullPrompt = `${imagePrompt}. ${characterDesc}${imageNegativePrompt ? `. Do NOT include: ${imageNegativePrompt}` : ''}`;
-  logger.info(`מייצר תמונה | הבעת דמות: ${mood} | פרומפט: ${imagePrompt.slice(0, 80)}...`);
+  logger.info(`מייצר תמונה | פרומפט: ${imagePrompt.slice(0, 100)}...`);
 
   logger.info(`מייצר תמונה | פרומפט: ${imagePrompt.slice(0, 100)}...`);
 
@@ -72,11 +47,14 @@ async function generateGardenImage({ imagePrompt, imageNegativePrompt, tipText }
       throw new Error('לא התקבלה תמונה מ-Gemini');
     }
 
-    const buffer = Buffer.from(imagePart.inlineData.data, 'base64');
-    const mimeType = imagePart.inlineData.mimeType || 'image/jpeg';
+    const gardenBuffer = Buffer.from(imagePart.inlineData.data, 'base64');
+    const gardenMime = imagePart.inlineData.mimeType || 'image/png';
+    logger.info(`תמונת גינה נוצרה | סוג: ${gardenMime} | גודל: ${Math.round(gardenBuffer.length / 1024)}KB`);
 
-    logger.info(`תמונה נוצרה | סוג: ${mimeType} | גודל: ${(buffer.length / 1024).toFixed(0)}KB`);
-    return { buffer, mimeType };
+    // Merge with Ganan & Roses logo
+    const merged = await mergeWithLogo(gardenBuffer, apiKey);
+    return merged;
+
   } catch (err) {
     logger.warn(`יצירת תמונה נכשלה: ${err.message}`);
     return null;

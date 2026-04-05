@@ -1,52 +1,68 @@
-const sharp = require('sharp');
+const fs = require('fs');
+const path = require('path');
 const logger = require('./logger');
 
-/**
- * Merges garden image (left/background) with character image (right side).
- * Returns a buffer of the merged image.
- */
-async function mergeImages(gardenBuffer, characterBuffer) {
+const LOGO_PATH = path.join(__dirname, '..', 'assets', 'logo.jpeg');
+
+async function mergeWithLogo(gardenBuffer, apiKey) {
+  if (!fs.existsSync(LOGO_PATH)) {
+    logger.warn('לוגו לא נמצא — שולח תמונת גינה בלבד');
+    return { buffer: gardenBuffer, mimeType: 'image/png' };
+  }
+
+  const logoBase64 = fs.readFileSync(LOGO_PATH).toString('base64');
+  const gardenBase64 = gardenBuffer.toString('base64');
+
+  logger.info('ממזג תמונת גינה עם לוגו גנן אנד רוזס...');
+
   try {
-    // Get metadata of both images
-    const gardenMeta = await sharp(gardenBuffer).metadata();
-    const charMeta = await sharp(characterBuffer).metadata();
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-preview-image-generation:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              {
+                text: `Take the first image (a garden scene) as the main background.
+Place the second image (the Ganan & Roses mascot logo) in the bottom-right corner of the garden image.
+The mascot should be sized at about 30-35% of the image height, clearly visible, keeping its original cartoon illustration style intact.
+Do not distort or change the mascot character.
+Blend the edges naturally with the garden background.
+Output a single merged photorealistic + cartoon composite image.`
+              },
+              { inlineData: { mimeType: 'image/png', data: gardenBase64 } },
+              { inlineData: { mimeType: 'image/jpeg', data: logoBase64 } }
+            ]
+          }],
+          generationConfig: { responseModalities: ['IMAGE', 'TEXT'] }
+        })
+      }
+    );
 
-    const targetHeight = gardenMeta.height || 1024;
-    const targetWidth = gardenMeta.width || 1024;
+    const data = await response.json();
 
-    // Resize character to ~40% of the garden image height, keep aspect ratio
-    const charHeight = Math.round(targetHeight * 0.5);
-    const charWidth = Math.round((charMeta.width / charMeta.height) * charHeight);
+    if (!response.ok || data.error) {
+      throw new Error(JSON.stringify(data.error || data));
+    }
 
-    const resizedChar = await sharp(characterBuffer)
-      .resize(charWidth, charHeight, { fit: 'contain', background: { r: 255, g: 255, b: 255, alpha: 0 } })
-      .png()
-      .toBuffer();
+    const parts = data.candidates?.[0]?.content?.parts || [];
+    const imagePart = parts.find((p) => p.inlineData?.mimeType?.startsWith('image/'));
 
-    // Position: bottom-right corner with small margin
-    const margin = 16;
-    const left = targetWidth - charWidth - margin;
-    const top = targetHeight - charHeight - margin;
+    if (!imagePart) {
+      throw new Error('לא התקבלה תמונה ממוזגת');
+    }
 
-    // Composite character over garden image
-    const merged = await sharp(gardenBuffer)
-      .composite([
-        {
-          input: resizedChar,
-          left: Math.max(0, left),
-          top: Math.max(0, top),
-          blend: 'over',
-        },
-      ])
-      .jpeg({ quality: 90 })
-      .toBuffer();
+    const buffer = Buffer.from(imagePart.inlineData.data, 'base64');
+    const mimeType = imagePart.inlineData.mimeType || 'image/png';
+    logger.info(`תמונה ממוזגת | גודל: ${Math.round(buffer.length / 1024)}KB`);
+    return { buffer, mimeType };
 
-    logger.info(`תמונות מוזגו | גינה: ${targetWidth}x${targetHeight} | דמות: ${charWidth}x${charHeight}`);
-    return merged;
   } catch (err) {
-    logger.warn(`שגיאה במיזוג תמונות: ${err.message} — שולח תמונת גינה בלבד`);
-    return gardenBuffer;
+    logger.warn(`מיזוג נכשל: ${err.message} — שולח תמונת גינה בלבד`);
+    return { buffer: gardenBuffer, mimeType: 'image/png' };
   }
 }
 
-module.exports = { mergeImages };
+module.exports = { mergeWithLogo };
