@@ -30,13 +30,14 @@ async function generateGardenImage({ imagePrompt, imageNegativePrompt, tipText }
   const mood = getMoodContext(tipText || '');
 
   // Build request parts — include logo as reference image if available
-  const textPrompt = `The first image is a reference character design (a cartoon gardener mascot called "Ganan & Roses").
-Take THAT EXACT character from the reference image — same face, same overalls, same hat, same tattoo sleeve, same roses — and render him as a living 3D animated character (Pixar/Disney style, not photorealistic human).
-Place him naturally inside this garden scene: ${imagePrompt}
-His mood/expression: ${mood}.
-He should feel alive and part of the scene, interacting with it.
-Keep his iconic design 100% faithful to the reference — do not change his face, outfit, or style.
-No text, no watermarks.${imageNegativePrompt ? ` Avoid: ${imageNegativePrompt}.` : ''}`;
+  const textPrompt = `The first image is a reference character design — a cartoon gardener mascot.
+Recreate ONLY the character himself (not the roses, not the logo frame, not any text) as a living 3D animated figure in Pixar/Disney style.
+Faithfully match: his muscular build, the blue denim overalls with one strap, red undershirt, brown wide-brim hat, detailed tattoo sleeve on his left arm, green gardening gloves, and his face.
+Do NOT include roses on or around the character. The roses belong to the logo, not to the character himself.
+Place him naturally and fully inside this garden scene: ${imagePrompt}
+His expression and body language: ${mood}.
+He should feel alive, 3D, and part of the scene — interacting with the environment shown.
+No text, no watermarks, no roses around the character.${imageNegativePrompt ? ` Also avoid: ${imageNegativePrompt}.` : ''}`;
 
   const parts = [];
 
